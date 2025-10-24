@@ -2,22 +2,31 @@
 
 namespace gitlink;
 
+//dotnet publish -r win-x64 -c Release --self-contained true
+
 class Program
 {
+    private static string[]? _args;
+    private static bool _isInitialized = false;
+    //флаги
+    private static readonly List<Flags> _allFlags = Flags.AllFlags;
+    private static List<Flags> _selectedFlags = [];
+    //команды
+    private static readonly List<Commands> _allCommands = Commands.AllCommands;
+    private static Commands _selectedCommand;
 
     static void Main(string[] args)
     {
-        if (args.Length == 0 || !args[0].Equals("create", StringComparison.CurrentCultureIgnoreCase))
+        InitializeArgs(args);
+        //Console.WriteLine(string.Join(',', args));
+
+        if (_args.Length == 0 || _args[0].Equals(Flags.Version.ToString(), StringComparison.CurrentCultureIgnoreCase))
         {
             Console.WriteLine("gitlink v1.1 made by Vol4ok69");
             Console.WriteLine("Try: gitlink create");
             return;
         }
 
-        foreach (string arg in args)
-        {
-            arg.ToLower().Trim();
-        }
         try
         {
             string logPath = Path.Combine(
@@ -117,7 +126,31 @@ class Program
             );
         }
     }
-
+    public static void InitializeArgs(string[]? args)
+    {
+        if (_isInitialized)
+            return;
+        _args = args;
+        _isInitialized = true;
+    }
+    public static void FindCommand()
+    {
+        Commands command = Commands.None;
+        foreach (var arg in _args)
+        {
+            if (Commands.GetCommand(arg) != Commands.None)
+                command = Commands.GetCommand(arg);
+        }
+        _selectedCommand = command;
+    }
+    public static void FindFlags()
+    {
+        foreach (string arg in _args)
+        {
+            if (Flags.GetFlag(arg) != Flags.None)
+                _selectedFlags.Add(Flags.GetFlag(arg));
+        }
+    }
     public static void Log(string logPath, string message) =>
         System.IO.File.AppendAllText(logPath, $"[{DateTime.Now:dd.MM.yyyy HH:mm:ss}] {message + Environment.NewLine}");
 }
