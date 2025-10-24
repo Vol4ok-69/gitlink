@@ -9,14 +9,21 @@ public sealed class Commands
 
     private Commands(string flag) => Command = flag;
 
-    public static readonly List<Commands?> AllCommands =
+    public static readonly List<Commands> AllCommands =
     [
-        Create
+        Create,
+        Version,
+        None
     ];
     /// <summary> 
     /// 
     /// </summary>
     public static readonly Commands Create = new("create");
+
+    /// <summary> 
+    /// Write version gitlink
+    /// </summary>
+    public static readonly Commands Version = new("version");
 
     /// <summary> 
     /// No command

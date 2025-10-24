@@ -10,31 +10,73 @@ class Program
     private static bool _isInitialized = false;
     //флаги
     private static readonly List<Flags> _allFlags = Flags.AllFlags;
+    private static readonly List<Flags> _allNotNoneFlags = [.. Flags.AllFlags.Where(f => f != Flags.None)];
     private static List<Flags> _selectedFlags = [];
     //команды
     private static readonly List<Commands> _allCommands = Commands.AllCommands;
+    private static readonly List<Commands> _allNotNoneCommands = [.. Commands.AllCommands.Where(c => c != Commands.None)];
     private static Commands _selectedCommand;
 
     static void Main(string[] args)
     {
         InitializeArgs(args);
         //Console.WriteLine(string.Join(',', args));
-
-        if (_args.Length == 0 || _args[0].Equals(Flags.Version.ToString(), StringComparison.CurrentCultureIgnoreCase))
+        if (_args is not null && _args.Length > 0 && _args == _args.Distinct())
         {
-            Console.WriteLine("gitlink v1.1 made by Vol4ok69");
-            Console.WriteLine("Try: gitlink create");
+            FindFlags();
+            FindCommand();
+            switch (_selectedCommand.ToString())
+            {
+                case "create":
+                    CommandCreate();
+                    break;
+
+                case "version":
+                    CommandVersion();
+                    break;
+
+                case "help":
+                    CommandHelp();
+                    break;
+
+                default:
+                    Console.WriteLine($"Please enter a command: [{string.Join(", ", _allNotNoneCommands)}]");
+                    return;
+            }
+        }
+        else if (_args != _args.Distinct())
+        {
+            Console.WriteLine("Error: Arguments should not be repeated.");
             return;
         }
-
+        else
+        {
+            Console.WriteLine("Error: line 24");
+            return;
+        }
+    }
+    public static void CommandCreate()
+    {
+        string logPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), "GitSupStrLog.txt");
         try
         {
-            string logPath = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.Desktop),
-                "GitSupStrLog.txt"
-            );
+            List<string> args = [];
+            int k = 0;
+            for (int i = 0; i < _args.Length; i++)
+            {
+                if (_args[k] == _args[i])
+                {
+                    args.Add(_args[i]); continue;
+                }
+            }
+            if (_args.Contains(Flags.All.ToString()) && _args.Length > 2)
+            {
+                Console.WriteLine("Cannot specify other flags when flag -a is specified");
+                return;
+            }
 
-            string targetDir = Environment.CurrentDirectory; // всегда текущая папка
+
+            string targetDir = Environment.CurrentDirectory; //всегда текущая папка
 
             if (!Directory.Exists(Path.Combine(targetDir, ".git")))
             {
@@ -121,11 +163,20 @@ class Program
         catch (Exception e)
         {
             Log(
-                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), "GitSupStrLog.txt"),
-                $"Error: {e.Message}\n{e.StackTrace}"
+                logPath, $"Error: {e.Message}\n{e.StackTrace}"
             );
         }
     }
+    public static void CommandVersion()
+    {
+        Console.WriteLine("gitlink v1.1 made by Vol4ok69");
+    }
+    public static void CommandHelp()
+    {
+        Console.WriteLine("All commands: ");
+        Console.WriteLine($"[{string.Join(", ", _allNotNoneCommands)}]");
+    }
+
     public static void InitializeArgs(string[]? args)
     {
         if (_isInitialized)

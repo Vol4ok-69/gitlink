@@ -13,7 +13,6 @@ public sealed class Flags
         Help,
         Git,
         GitIgnore,
-        Version,
         None
     ];
 
@@ -40,11 +39,6 @@ public sealed class Flags
     /// Creates .gitignore and adds all .* files in directory to it.
     /// </summary>
     public static readonly Flags GitIgnore = new("-gi");
-
-    /// <summary> 
-    /// Write version gitlink
-    /// </summary>
-    public static readonly Flags Version = new("-v");
 
     /// <summary> 
     /// Without flag
