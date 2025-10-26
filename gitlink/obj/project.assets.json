@@ -11,17 +11,6 @@
           "lib/net45/Interop.IWshRuntimeLibrary.dll": {}
         }
       }
-    },
-    "net10.0/win-x64": {
-      "Interop.IWshRuntimeLibrary/1.0.1": {
-        "type": "package",
-        "compile": {
-          "lib/net45/Interop.IWshRuntimeLibrary.dll": {}
-        },
-        "runtime": {
-          "lib/net45/Interop.IWshRuntimeLibrary.dll": {}
-        }
-      }
     }
   },
   "libraries": {
@@ -109,20 +98,6 @@
         ],
         "assetTargetFallback": true,
         "warn": true,
-        "downloadDependencies": [
-          {
-            "name": "Microsoft.AspNetCore.App.Runtime.win-x64",
-            "version": "[10.0.0-rc.1.25451.107, 10.0.0-rc.1.25451.107]"
-          },
-          {
-            "name": "Microsoft.NETCore.App.Runtime.win-x64",
-            "version": "[10.0.0-rc.1.25451.107, 10.0.0-rc.1.25451.107]"
-          },
-          {
-            "name": "Microsoft.WindowsDesktop.App.Runtime.win-x64",
-            "version": "[10.0.0-rc.1.25451.107, 10.0.0-rc.1.25451.107]"
-          }
-        ],
         "frameworkReferences": {
           "Microsoft.NETCore.App": {
             "privateAssets": "all"
@@ -402,11 +377,6 @@
           "System.Xml.XPath": "(,4.3.32767]",
           "System.Xml.XPath.XDocument": "(,5.0.32767]"
         }
-      }
-    },
-    "runtimes": {
-      "win-x64": {
-        "#import": []
       }
     }
   },

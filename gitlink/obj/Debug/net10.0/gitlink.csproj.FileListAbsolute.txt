@@ -1,0 +1,17 @@
+C:\Users\ivank\Desktop\Учёба\C#\gitlink\gitlink\bin\Debug\net10.0\gitlink.exe
+C:\Users\ivank\Desktop\Учёба\C#\gitlink\gitlink\bin\Debug\net10.0\gitlink.deps.json
+C:\Users\ivank\Desktop\Учёба\C#\gitlink\gitlink\bin\Debug\net10.0\gitlink.runtimeconfig.json
+C:\Users\ivank\Desktop\Учёба\C#\gitlink\gitlink\bin\Debug\net10.0\gitlink.dll
+C:\Users\ivank\Desktop\Учёба\C#\gitlink\gitlink\bin\Debug\net10.0\gitlink.pdb
+C:\Users\ivank\Desktop\Учёба\C#\gitlink\gitlink\bin\Debug\net10.0\Interop.IWshRuntimeLibrary.dll
+C:\Users\ivank\Desktop\Учёба\C#\gitlink\gitlink\obj\Debug\net10.0\gitlink.csproj.AssemblyReference.cache
+C:\Users\ivank\Desktop\Учёба\C#\gitlink\gitlink\obj\Debug\net10.0\gitlink.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\ivank\Desktop\Учёба\C#\gitlink\gitlink\obj\Debug\net10.0\gitlink.AssemblyInfoInputs.cache
+C:\Users\ivank\Desktop\Учёба\C#\gitlink\gitlink\obj\Debug\net10.0\gitlink.AssemblyInfo.cs
+C:\Users\ivank\Desktop\Учёба\C#\gitlink\gitlink\obj\Debug\net10.0\gitlink.csproj.CoreCompileInputs.cache
+C:\Users\ivank\Desktop\Учёба\C#\gitlink\gitlink\obj\Debug\net10.0\gitlink.csproj.Up2Date
+C:\Users\ivank\Desktop\Учёба\C#\gitlink\gitlink\obj\Debug\net10.0\gitlink.dll
+C:\Users\ivank\Desktop\Учёба\C#\gitlink\gitlink\obj\Debug\net10.0\refint\gitlink.dll
+C:\Users\ivank\Desktop\Учёба\C#\gitlink\gitlink\obj\Debug\net10.0\gitlink.pdb
+C:\Users\ivank\Desktop\Учёба\C#\gitlink\gitlink\obj\Debug\net10.0\gitlink.genruntimeconfig.cache
+C:\Users\ivank\Desktop\Учёба\C#\gitlink\gitlink\obj\Debug\net10.0\ref\gitlink.dll

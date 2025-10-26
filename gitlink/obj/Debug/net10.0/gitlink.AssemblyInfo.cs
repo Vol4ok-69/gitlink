@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("gitlink")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+a6a5fe922f4a3b3a400128167b1eba0803840889")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+44b17540478f10c2943b14bf1154d0be9c624669")]
 [assembly: System.Reflection.AssemblyProductAttribute("gitlink")]
 [assembly: System.Reflection.AssemblyTitleAttribute("gitlink")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

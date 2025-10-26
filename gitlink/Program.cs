@@ -1,207 +1,333 @@
 ﻿using IWshRuntimeLibrary;
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 
-namespace gitlink;
-
-//dotnet publish -r win-x64 -c Release --self-contained true
-
-class Program
+namespace gitlink
 {
-    private static string[]? _args;
-    private static bool _isInitialized = false;
-    //флаги
-    private static readonly List<Flags> _allFlags = Flags.AllFlags;
-    private static readonly List<Flags> _allNotNoneFlags = [.. Flags.AllFlags.Where(f => f != Flags.None)];
-    private static List<Flags> _selectedFlags = [];
-    //команды
-    private static readonly List<Commands> _allCommands = Commands.AllCommands;
-    private static readonly List<Commands> _allNotNoneCommands = [.. Commands.AllCommands.Where(c => c != Commands.None)];
-    private static Commands _selectedCommand;
+    //              dotnet publish -r win-x64 -c Release --self-contained true
 
-    static void Main(string[] args)
+    class Program
     {
-        InitializeArgs(args);
-        //Console.WriteLine(string.Join(',', args));
-        if (_args is not null && _args.Length > 0 && _args == _args.Distinct())
+        private static string[]? _args;
+        private static bool _isInitialized = false;
+        private static readonly string _targetDir = Environment.CurrentDirectory;
+        private static readonly string _logPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), "GitSupStrLog.txt");
+
+        // флаги
+        private static readonly List<Flags> _allNotNoneFlags = Flags.AllFlags.Where(f => f != Flags.None).ToList();
+        private static List<Flags> _selectedFlags = new List<Flags>();
+
+        // команды
+        private static readonly List<Commands> _allNotNoneCommands = Commands.AllCommands.Where(c => c != Commands.None).ToList();
+        private static Commands _selectedCommand = Commands.None;
+
+        static void Main(string[] args)
         {
-            FindFlags();
-            FindCommand();
-            switch (_selectedCommand.ToString())
+            Console.OutputEncoding = System.Text.Encoding.UTF8;
+            Log(_logPath, $"dir: {_targetDir}");
+            InitializeArgs(args);
+
+            if (_args is not null && _args.Length > 0)
             {
-                case "create":
-                    CommandCreate();
-                    break;
-
-                case "version":
-                    CommandVersion();
-                    break;
-
-                case "help":
-                    CommandHelp();
-                    break;
-
-                default:
-                    Console.WriteLine($"Please enter a command: [{string.Join(", ", _allNotNoneCommands)}]");
-                    return;
-            }
-        }
-        else if (_args != _args.Distinct())
-        {
-            Console.WriteLine("Error: Arguments should not be repeated.");
-            return;
-        }
-        else
-        {
-            Console.WriteLine("Error: line 24");
-            return;
-        }
-    }
-    public static void CommandCreate()
-    {
-        string logPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), "GitSupStrLog.txt");
-        try
-        {
-            List<string> args = [];
-            int k = 0;
-            for (int i = 0; i < _args.Length; i++)
-            {
-                if (_args[k] == _args[i])
+                // проверка на повтор аргументов
+                if (_args.Distinct(StringComparer.Ordinal).Count() != _args.Length)
                 {
-                    args.Add(_args[i]); continue;
-                }
-            }
-            if (_args.Contains(Flags.All.ToString()) && _args.Length > 2)
-            {
-                Console.WriteLine("Cannot specify other flags when flag -a is specified");
-                return;
-            }
-
-
-            string targetDir = Environment.CurrentDirectory; //всегда текущая папка
-
-            if (!Directory.Exists(Path.Combine(targetDir, ".git")))
-            {
-                string msg = $"'{targetDir}' not a Git perository (.git not found).";
-                Console.WriteLine(msg);
-                Log(logPath, msg);
-                return;
-            }
-
-            string gitBashPath = @"C:\Program Files\Git\git-bash.exe";
-            if (!System.IO.File.Exists(gitBashPath))
-            {
-                gitBashPath = @"C:\Program Files (x86)\Git\git-bash.exe";
-                if (!System.IO.File.Exists(gitBashPath))
-                {
-                    string msg = "Git Bash not found. Make sure Git is installed.";
-                    Console.WriteLine(msg);
-                    Log(logPath, msg);
+                    Console.WriteLine("Error: Arguments should not be repeated.");
                     return;
                 }
-            }
 
-            string shortcutPath = Path.Combine(targetDir, "Git Bash.lnk");
-            var wsh = new WshShell();
-            if (wsh.CreateShortcut(shortcutPath) is IWshShortcut shortcut)
-            {
-                //ярлык
-                shortcut.TargetPath = gitBashPath;
-                shortcut.WorkingDirectory = targetDir;
-                shortcut.Description = "Git Bash in this repository";
-                shortcut.Save();
-
-                string msg = $"shortcut created: {shortcutPath}.";
-                Console.WriteLine(msg);
-                Log(logPath, msg);
-
-                //.gitignore
-                string gitIgnorePath = Path.Combine(targetDir, ".gitignore");
-                string[] paths =
-                [
-                    ".vs/",
-                    ".vscode/",
-                    ".metadata/",
-                    "Git Bash.lnk",
-                    ".github/"
-                ];
-                bool isExist = System.IO.File.Exists(gitIgnorePath);
-                string[] lines = isExist
-                    ? System.IO.File.ReadAllLines(gitIgnorePath)
-                    : [];
-                bool isShowed = false;
-                foreach (string path in paths)
+                // распознаём первую команду безопасно
+                var firstCmd = Commands.GetCommand(_args[0]);
+                if (firstCmd == Commands.None)
                 {
-                    string nameToCheck = path.TrimEnd('/');
-                    string fullPath = Path.Combine(targetDir, nameToCheck);
+                    Console.WriteLine("Error: The first argument must be command. [help] to view all commands.");
+                    return;
+                }
+                _selectedCommand = firstCmd;
 
-                    bool exists = Directory.Exists(fullPath) || System.IO.File.Exists(fullPath);
-                    bool alreadyIgnored = lines.Any(line =>
-                        line.Trim().TrimEnd('/') == path.TrimEnd('/'));
+                FindFlags();
+                // команда уже установлена — переходим к выполнению
+                switch (_selectedCommand.ToString())
+                {
+                    case "create":
+                        Log(_logPath, $"dir: {_targetDir}");
+                        CommandCreate();
+                        break;
 
-                    if (exists && !alreadyIgnored)
-                    {
-                        if (!isExist && !isShowed)
-                        {
-                            string msgGitIgnore = $".gitignore created: \'{targetDir}\'.";
-                            Console.WriteLine(msgGitIgnore);
-                            Log(logPath, msgGitIgnore);
-                            isShowed = true;
-                        }
-                        System.IO.File.AppendAllText(gitIgnorePath, path + Environment.NewLine);
-                        string msgGitIgnoreAdd = $"Added to .gitignore: '{path}'";
-                        Console.WriteLine(msgGitIgnoreAdd);
-                        Log(logPath, msgGitIgnoreAdd);
-                    }
+                    case "version":
+                        Log(_logPath, $"dir: {_targetDir}");
+                        CommandVersion();
+                        break;
+
+                    case "help":
+                        Log(_logPath, $"dir: {_targetDir}");
+                        CommandHelp();
+                        break;
+
+                    default:
+                        Console.WriteLine($"Please enter a command. Use [help] to see available commands.");
+                        return;
                 }
             }
             else
             {
-                string msg = $"Failed to create shortcut.";
-                Console.WriteLine(msg);
-                Log(logPath, msg);
+                Console.WriteLine("Error: no arguments provided. Use [help] to see available commands.");
+                return;
             }
         }
-        catch (Exception e)
-        {
-            Log(
-                logPath, $"Error: {e.Message}\n{e.StackTrace}"
-            );
-        }
-    }
-    public static void CommandVersion()
-    {
-        Console.WriteLine("gitlink v1.1 made by Vol4ok69");
-    }
-    public static void CommandHelp()
-    {
-        Console.WriteLine("All commands: ");
-        Console.WriteLine($"[{string.Join(", ", _allNotNoneCommands)}]");
-    }
 
-    public static void InitializeArgs(string[]? args)
-    {
-        if (_isInitialized)
-            return;
-        _args = args;
-        _isInitialized = true;
-    }
-    public static void FindCommand()
-    {
-        Commands command = Commands.None;
-        foreach (var arg in _args)
+        public static void CommandCreate()
         {
-            if (Commands.GetCommand(arg) != Commands.None)
-                command = Commands.GetCommand(arg);
+            try
+            {
+                // проверка на конфликт флага -a c другими
+                if (_selectedFlags.Contains(Flags.All) && _selectedFlags.Count > 1)
+                {
+                    Console.WriteLine("Cannot specify other flags when flag [-a] is specified");
+                    return;
+                }
+
+                bool doAll = _selectedFlags.Contains(Flags.All);
+                bool doGit = doAll || _selectedFlags.Contains(Flags.Git);
+                bool doGitIgnore = doAll || _selectedFlags.Contains(Flags.GitIgnore);
+                bool doShortcut = doAll || _selectedFlags.Contains(Flags.Shortcut);
+
+                string? gitExecutable = null;
+                string gitExe1 = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Git", "bin", "git.exe");
+                string gitExe2 = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Git", "bin", "git.exe");
+                if (System.IO.File.Exists(gitExe1)) gitExecutable = gitExe1;
+                else if (System.IO.File.Exists(gitExe2)) gitExecutable = gitExe2;
+                else
+                {
+                    try
+                    {
+                        var res = CommandRunner.RunCommand("git", "--version", Directory.GetCurrentDirectory());
+                        if (!res.StartsWith("Error"))
+                        {
+                            gitExecutable = "git";
+                        }
+                    }
+                    catch
+                    {
+                        gitExecutable = null;
+                    }
+                }
+
+                if (doGit && gitExecutable == null)
+                {
+                    string msg = "Git not found. Make sure Git is installed and available in PATH.";
+                    Console.WriteLine(msg);
+                    Log(_logPath, msg);
+                    return;
+                }
+
+                // git actions...
+                if (doGit)
+                {
+                    if (!Directory.Exists(Path.Combine(_targetDir, ".git")))
+                    {
+                        string initOut = CommandRunner.RunCommand(gitExecutable!, "init", _targetDir);
+                        Console.WriteLine(initOut.Trim());
+                        Log(_logPath, $"git init output: {initOut}");
+                    }
+                    else
+                    {
+                        Log(_logPath, $"Repository already initialized in '{_targetDir}'.");
+                    }
+
+                    string addOut = CommandRunner.RunCommand(gitExecutable!, "add .", _targetDir);
+                    Log(_logPath, $"git add output: {addOut}");
+
+                    string commitOut = CommandRunner.RunCommand(gitExecutable!, "commit -m \"Initial commit\"", _targetDir);
+                    if (commitOut.StartsWith("Error"))
+                    {
+                        Log(_logPath, $"git commit failed or nothing to commit: {commitOut}");
+                        Console.WriteLine("Warning: commit may have failed (check git config or no changes). See log.");
+                    }
+                    else
+                    {
+                        Log(_logPath, $"git commit output: {commitOut}");
+                    }
+                }
+
+                // .gitignore handling (interactive)
+                if (doGitIgnore)
+                {
+                    string gitIgnorePath = Path.Combine(_targetDir, ".gitignore");
+                    string[] candidatePaths = new[]
+                    {
+                        ".vs/",
+                        ".vscode/",
+                        ".metadata/",
+                        "Git Bash.lnk",
+                        ".github/"
+                    };
+
+                    bool isExist = System.IO.File.Exists(gitIgnorePath);
+                    var existingLines = isExist ? System.IO.File.ReadAllLines(gitIgnorePath).Select(l => l.Trim().TrimEnd('/')).ToHashSet(StringComparer.OrdinalIgnoreCase) : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+                    List<string> foundCandidates = new List<string>();
+                    foreach (var path in candidatePaths)
+                    {
+                        string nameToCheck = path.TrimEnd('/');
+                        string fullPath = Path.Combine(_targetDir, nameToCheck);
+                        if (Directory.Exists(fullPath) || System.IO.File.Exists(fullPath))
+                            foundCandidates.Add(path);
+                    }
+
+                    if (foundCandidates.Count == 0)
+                    {
+                        Console.WriteLine("No candidate files or directories (.vs, .vscode, .metadata, Git Bash.lnk, .github) found to add to .gitignore.");
+                    }
+                    else
+                    {
+                        Console.WriteLine("Found the following candidates to add to .gitignore:");
+                        foreach (var p in foundCandidates) Console.WriteLine($"  {p}");
+                        Console.WriteLine("Options: [y] add this, [n] skip, [a] add this and all remaining");
+
+                        if (!isExist)
+                        {
+                            System.IO.File.WriteAllText(gitIgnorePath, string.Empty);
+                            isExist = true;
+                            Log(_logPath, $".gitignore created: '{gitIgnorePath}'.");
+                        }
+
+                        for (int i = 0; i < foundCandidates.Count; i++)
+                        {
+                            string path = foundCandidates[i];
+                            string nameToCheck = path.TrimEnd('/');
+                            if (existingLines.Contains(nameToCheck))
+                                continue;
+
+                            while (true)
+                            {
+                                Console.Write($"Add '{path}' to .gitignore? [y/n/a] ");
+                                var input = Console.ReadLine()?.Trim().ToLowerInvariant() ?? "";
+
+                                if (input == "a" || input == "all")
+                                {
+                                    for (int j = i; j < foundCandidates.Count; j++)
+                                    {
+                                        string rem = foundCandidates[j];
+                                        string remName = rem.TrimEnd('/');
+                                        if (!existingLines.Contains(remName))
+                                        {
+                                            System.IO.File.AppendAllText(gitIgnorePath, rem + Environment.NewLine);
+                                            string msg = $"Added to .gitignore: '{rem}'";
+                                            Console.WriteLine(msg);
+                                            Log(_logPath, msg);
+                                            existingLines.Add(remName);
+                                        }
+                                    }
+                                    i = foundCandidates.Count; // выйти из for
+                                    break;
+                                }
+
+                                if (input == "y" || input == "yes")
+                                {
+                                    System.IO.File.AppendAllText(gitIgnorePath, path + Environment.NewLine);
+                                    string msgAdded = $"Added to .gitignore: '{path}'";
+                                    Console.WriteLine(msgAdded);
+                                    Log(_logPath, msgAdded);
+                                    existingLines.Add(nameToCheck);
+                                    break;
+                                }
+
+                                if (input == "n" || input == "no" || input == "")
+                                    break;
+
+                                Console.WriteLine("Please answer 'y', 'n' or 'a'.");
+                            }
+                        }
+                    }
+                }
+
+                // shortcut
+                if (doShortcut)
+                {
+                    string gitBashPath = @"C:\Program Files\Git\git-bash.exe";
+                    if (!System.IO.File.Exists(gitBashPath))
+                    {
+                        gitBashPath = @"C:\Program Files (x86)\Git\git-bash.exe";
+                        if (!System.IO.File.Exists(gitBashPath))
+                            Log(_logPath, "Git Bash not found in Program Files.");
+                    }
+
+                    string shortcutPath = Path.Combine(_targetDir, "Git Bash.lnk");
+                    try
+                    {
+                        var wsh = new WshShell();
+                        var sc = (IWshShortcut)wsh.CreateShortcut(shortcutPath);
+                        sc.TargetPath = System.IO.File.Exists(gitBashPath) ? gitBashPath : "git";
+                        sc.WorkingDirectory = _targetDir;
+                        sc.Description = "Git Bash in this repository";
+                        sc.Save();
+
+                        string msg = $"Shortcut created: '{shortcutPath}'.";
+                        Console.WriteLine(msg);
+                        Log(_logPath, msg);
+                    }
+                    catch (Exception ex)
+                    {
+                        string msg = $"Failed to create shortcut: {ex.Message}";
+                        Console.WriteLine(msg);
+                        Log(_logPath, msg);
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                Log(_logPath, $"Error: {e.Message}\n{e.StackTrace}");
+            }
         }
-        _selectedCommand = command;
-    }
-    public static void FindFlags()
-    {
-        foreach (string arg in _args)
+
+        public static void CommandVersion()
         {
-            if (Flags.GetFlag(arg) != Flags.None)
-                _selectedFlags.Add(Flags.GetFlag(arg));
+            Console.WriteLine("gitlink v1.2 made by Vol4ok69");
         }
+
+        public static void CommandHelp()
+        {
+            Console.WriteLine("All commands: ");
+            Console.WriteLine($"[{string.Join(", ", _allNotNoneCommands)}]\n");
+            Console.WriteLine("All flags: ");
+            Console.WriteLine($"[{string.Join(", ", _allNotNoneFlags)}]\n");
+            Console.WriteLine("Usage example:");
+            Console.WriteLine("  gitlink create -a    # create repo, .gitignore and shortcut");
+            Console.WriteLine("  gitlink create -g    # only git init/add/commit");
+            Console.WriteLine("  gitlink create -gi   # only .gitignore additions");
+            Console.WriteLine("  gitlink create -s    # only create shortcut");
+        }
+
+        public static void InitializeArgs(string[]? args)
+        {
+            if (_isInitialized)
+                return;
+            _args = args;
+            //_args = new string[]
+            //{
+            //    "create",
+            //    "-s"
+            //};
+            _isInitialized = true;
+        }
+
+        public static void FindFlags()
+        {
+            if (_args is null)
+                return;
+
+            foreach (var arg in _args.Skip(1))
+            {
+                var flag = Flags.GetFlag(arg);
+                if (flag != Flags.None && !_selectedFlags.Contains(flag))
+                    _selectedFlags.Add(flag);
+            }
+        }
+
+        public static void Log(string logPath, string message) =>
+            System.IO.File.AppendAllText(logPath, $"[{DateTime.Now:dd.MM.yyyy HH:mm:ss}] {message + Environment.NewLine}");
     }
-    public static void Log(string logPath, string message) =>
-        System.IO.File.AppendAllText(logPath, $"[{DateTime.Now:dd.MM.yyyy HH:mm:ss}] {message + Environment.NewLine}");
 }

@@ -1,43 +1,48 @@
-﻿//using System.ComponentModel.DataAnnotations;
-using System.Security.AccessControl;
-
-namespace gitlink;
-
-public sealed class Commands
+﻿namespace gitlink
 {
-    public string Command { get; }
-
-    private Commands(string flag) => Command = flag;
-
-    public static readonly List<Commands> AllCommands =
-    [
-        Create,
-        Version,
-        None
-    ];
-    /// <summary> 
-    /// 
-    /// </summary>
-    public static readonly Commands Create = new("create");
-
-    /// <summary> 
-    /// Write version gitlink
-    /// </summary>
-    public static readonly Commands Version = new("version");
-
-    /// <summary> 
-    /// No command
-    /// </summary>
-    public static readonly Commands None = new("");
-
-    /// <returns>Flag in string representation</returns>
-    public override string ToString() => Command;
-
-    public static Commands GetCommand(string commandStr)
+    public sealed class Commands
     {
-        foreach (var command in AllCommands)
-            if (command.ToString().Equals(commandStr))
-                return command;
-        return None;
+        public string Command { get; }
+
+        private Commands(string flag) => Command = flag;
+
+        public static readonly Commands Create = new("create");
+
+        /// <summary>
+        /// Write version gitlink
+        /// </summary>
+        public static readonly Commands Version = new("version");
+
+        /// <summary>
+        /// Help command
+        /// </summary>
+        public static readonly Commands Help = new("help");
+
+        /// <summary>
+        /// No command
+        /// </summary>
+        public static readonly Commands None = new("");
+
+        public static readonly List<Commands> AllCommands = new List<Commands>
+        {
+            None,
+            Create,
+            Version,
+            Help
+        };
+
+        /// <returns>Flag in string representation</returns>
+        public override string ToString() => Command;
+
+        public static Commands GetCommand(string commandStr)
+        {
+            if (commandStr == null) return None;
+            foreach (var command in AllCommands)
+            {
+                if (command != null && command.ToString().Equals(commandStr, System.StringComparison.Ordinal))
+                    return command;
+            }
+            return None;
+        }
     }
 }
