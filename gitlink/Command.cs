@@ -9,6 +9,11 @@
         public static readonly Command Create = new("create");
 
         /// <summary>
+        /// Write status
+        /// </summary>
+        public static readonly Command Status = new("status");
+
+        /// <summary>
         /// Write gitlink version
         /// </summary>
         public static readonly Command Version = new("version");
@@ -28,6 +33,7 @@
             None,
             Create,
             Version,
+            Status,
             Help
         ];
 

@@ -57,6 +57,11 @@ namespace gitlink
                         CommandVersion();
                         break;
 
+                    case "status":
+                        Log(_logPath, $"dir: {_targetDir}");
+                        CommandStatus();
+                        break;
+
                     case "help":
                         Log(_logPath, $"dir: {_targetDir}");
                         CommandHelp();
@@ -305,6 +310,81 @@ namespace gitlink
             {
                 Print($"Error: {e.Message}", ConsoleColor.Red);
                 Log(_logPath, $"Error: {e.Message}\n{e.StackTrace}");
+            }
+        }
+
+        public static void CommandStatus()
+        {
+            try
+            {
+                string repoRoot = _targetDir;
+                while (repoRoot != null && !Directory.Exists(Path.Combine(repoRoot, ".git")))
+                {
+                    string? parent = Directory.GetParent(repoRoot)?.FullName;
+                    if (parent == null || parent == repoRoot)
+                        break;
+                    repoRoot = parent;
+                }
+
+                bool repoExists = Directory.Exists(Path.Combine(repoRoot, ".git"));
+                bool shortcutExists = System.IO.File.Exists(Path.Combine(_targetDir, "Git Bash.lnk"));
+                string gitIgnorePath = Path.Combine(repoRoot, ".gitignore");
+                bool gitignoreExists = System.IO.File.Exists(gitIgnorePath);
+
+                //репозиторий
+                if (repoExists)
+                    Print("✔ Git repository detected (.git found)", ConsoleColor.Green);
+                else
+                    Print("✖ No Git repository found", ConsoleColor.Red);
+
+                //ярлык
+                if (shortcutExists)
+                    Print("✔ Shortcut 'Git Bash.lnk' exists", ConsoleColor.Green);
+                else
+                    Print("✖ Shortcut 'Git Bash.lnk' not found", ConsoleColor.Yellow);
+
+                //.gitignore
+                if (gitignoreExists)
+                {
+                    string[] lines = System.IO.File.ReadAllLines(gitIgnorePath);
+                    var existing = lines.Select(l => l.Trim().TrimEnd('/'))
+                                        .Where(l => !string.IsNullOrWhiteSpace(l))
+                                        .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+                    string projectName = Path.GetFileName(repoRoot.TrimEnd(Path.DirectorySeparatorChar));
+                    string[] candidatePaths =
+                    [
+                        projectName + "/bin/",
+                        projectName + "/obj/",
+                        ".vs/",
+                        ".vscode/",
+                        ".metadata/",
+                        ".github/",
+                        "Git Bash.lnk"
+                    ];
+
+                    var missing = candidatePaths.Where(p => !existing.Contains(p.TrimEnd('/'))).ToList();
+
+                    if (missing.Count == 0)
+                        Print("All common entries are already in .gitignore", ConsoleColor.Green);
+                    else
+                    {
+                        Print("Some entries are missing in .gitignore:", ConsoleColor.Yellow);
+                        foreach (var m in missing)
+                            Print($"   - {m}", ConsoleColor.Gray);
+                    }
+                }
+                else
+                    Print(".gitignore not found", ConsoleColor.Red);
+
+
+                Log(_logPath, $"Status checked for '{_targetDir}'");
+            }
+            catch (Exception ex)
+            {
+                string msg = $"Error during status check: {ex.Message}";
+                Print(msg, ConsoleColor.Red);
+                Log(_logPath, msg);
             }
         }
 
