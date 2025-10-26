@@ -23,13 +23,13 @@
         /// </summary>
         public static readonly Commands None = new("");
 
-        public static readonly List<Commands> AllCommands = new List<Commands>
-        {
+        public static readonly List<Commands> AllCommands =
+        [
             None,
             Create,
             Version,
             Help
-        };
+        ];
 
         /// <returns>Flag in string representation</returns>
         public override string ToString() => Command;

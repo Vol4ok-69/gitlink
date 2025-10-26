@@ -1,8 +1,5 @@
 ﻿using IWshRuntimeLibrary;
-using System;
-using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 
 namespace gitlink
 {
@@ -15,30 +12,29 @@ namespace gitlink
         private static readonly string _targetDir = Environment.CurrentDirectory;
         private static readonly string _logPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), "GitSupStrLog.txt");
 
-        // флаги
-        private static readonly List<Flags> _allNotNoneFlags = Flags.AllFlags.Where(f => f != Flags.None).ToList();
-        private static List<Flags> _selectedFlags = new List<Flags>();
+        //флаги
+        private static readonly List<Flags> _allNotNoneFlags = [.. Flags.AllFlags.Skip(1)];
+        private static List<Flags> _selectedFlags = [];
 
-        // команды
-        private static readonly List<Commands> _allNotNoneCommands = Commands.AllCommands.Where(c => c != Commands.None).ToList();
+        //команды
+        private static readonly List<Commands> _allNotNoneCommands = [.. Commands.AllCommands.Skip(1)];
         private static Commands _selectedCommand = Commands.None;
 
         static void Main(string[] args)
         {
             Console.OutputEncoding = System.Text.Encoding.UTF8;
-            Log(_logPath, $"dir: {_targetDir}");
             InitializeArgs(args);
 
             if (_args is not null && _args.Length > 0)
             {
-                // проверка на повтор аргументов
+                //проверка на повтор аргументов
                 if (_args.Distinct(StringComparer.Ordinal).Count() != _args.Length)
                 {
                     Console.WriteLine("Error: Arguments should not be repeated.");
                     return;
                 }
 
-                // распознаём первую команду безопасно
+                //распознаем первую команду безопасно
                 var firstCmd = Commands.GetCommand(_args[0]);
                 if (firstCmd == Commands.None)
                 {
@@ -48,7 +44,7 @@ namespace gitlink
                 _selectedCommand = firstCmd;
 
                 FindFlags();
-                // команда уже установлена — переходим к выполнению
+
                 switch (_selectedCommand.ToString())
                 {
                     case "create":
@@ -82,7 +78,7 @@ namespace gitlink
         {
             try
             {
-                // проверка на конфликт флага -a c другими
+                //проверка на конфликт флага -a c другими
                 if (_selectedFlags.Contains(Flags.All) && _selectedFlags.Count > 1)
                 {
                     Console.WriteLine("Cannot specify other flags when flag [-a] is specified");
@@ -105,9 +101,7 @@ namespace gitlink
                     {
                         var res = CommandRunner.RunCommand("git", "--version", Directory.GetCurrentDirectory());
                         if (!res.StartsWith("Error"))
-                        {
                             gitExecutable = "git";
-                        }
                     }
                     catch
                     {
@@ -123,7 +117,6 @@ namespace gitlink
                     return;
                 }
 
-                // git actions...
                 if (doGit)
                 {
                     if (!Directory.Exists(Path.Combine(_targetDir, ".git")))
@@ -133,9 +126,7 @@ namespace gitlink
                         Log(_logPath, $"git init output: {initOut}");
                     }
                     else
-                    {
                         Log(_logPath, $"Repository already initialized in '{_targetDir}'.");
-                    }
 
                     string addOut = CommandRunner.RunCommand(gitExecutable!, "add .", _targetDir);
                     Log(_logPath, $"git add output: {addOut}");
@@ -147,28 +138,50 @@ namespace gitlink
                         Console.WriteLine("Warning: commit may have failed (check git config or no changes). See log.");
                     }
                     else
-                    {
                         Log(_logPath, $"git commit output: {commitOut}");
-                    }
                 }
 
-                // .gitignore handling (interactive)
+
                 if (doGitIgnore)
                 {
-                    string gitIgnorePath = Path.Combine(_targetDir, ".gitignore");
-                    string[] candidatePaths = new[]
+                    //корневая папка репозитория
+                    string repoRoot = _targetDir;
+                    while (repoRoot != null && !Directory.Exists(Path.Combine(repoRoot, ".git")))
                     {
+                        string? parent = Directory.GetParent(repoRoot)?.FullName;
+                        if (parent == null || parent == repoRoot)
+                            break; //достигли корня диска
+                        repoRoot = parent;
+                    }
+
+                    if (!Directory.Exists(Path.Combine(repoRoot, ".git")))
+                    {
+                        Console.WriteLine("Warning: .git folder not found in parent directories. Using current directory.");
+                        repoRoot = _targetDir;
+                    }
+
+                    string gitIgnorePath = Path.Combine(repoRoot, ".gitignore");
+
+                    string projectName = Path.GetFileName(repoRoot.TrimEnd(Path.DirectorySeparatorChar));
+
+                    string[] candidatePaths =
+                    [
+                        projectName+"/bin/",
+                        projectName+"/obj/",
                         ".vs/",
                         ".vscode/",
                         ".metadata/",
-                        "Git Bash.lnk",
-                        ".github/"
-                    };
+                        ".github/",
+                        "Git Bash.lnk"
+                    ];
 
                     bool isExist = System.IO.File.Exists(gitIgnorePath);
-                    var existingLines = isExist ? System.IO.File.ReadAllLines(gitIgnorePath).Select(l => l.Trim().TrimEnd('/')).ToHashSet(StringComparer.OrdinalIgnoreCase) : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    var existingLines = isExist
+                        ? System.IO.File.ReadAllLines(gitIgnorePath)
+                        .Select(l => l.Trim().TrimEnd('/')).ToHashSet(StringComparer.OrdinalIgnoreCase)
+                        : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-                    List<string> foundCandidates = new List<string>();
+                    List<string> foundCandidates = [];
                     foreach (var path in candidatePaths)
                     {
                         string nameToCheck = path.TrimEnd('/');
@@ -178,9 +191,8 @@ namespace gitlink
                     }
 
                     if (foundCandidates.Count == 0)
-                    {
-                        Console.WriteLine("No candidate files or directories (.vs, .vscode, .metadata, Git Bash.lnk, .github) found to add to .gitignore.");
-                    }
+                        Console.WriteLine("No candidate files or directories (.vs, .vscode, .metadata, Git Bash.lnk, .github, bin, obj) found to add to .gitignore.");
+
                     else
                     {
                         Console.WriteLine("Found the following candidates to add to .gitignore:");
@@ -204,7 +216,10 @@ namespace gitlink
                             while (true)
                             {
                                 Console.Write($"Add '{path}' to .gitignore? [y/n/a] ");
-                                var input = Console.ReadLine()?.Trim().ToLowerInvariant() ?? "";
+                                var input = Console.ReadLine()?.
+                                    Trim().
+                                    ToLowerInvariant()
+                                    ?? "";
 
                                 if (input == "a" || input == "all")
                                 {
@@ -221,7 +236,7 @@ namespace gitlink
                                             existingLines.Add(remName);
                                         }
                                     }
-                                    i = foundCandidates.Count; // выйти из for
+                                    i = foundCandidates.Count; //выход из фор внешнего
                                     break;
                                 }
 
@@ -244,7 +259,6 @@ namespace gitlink
                     }
                 }
 
-                // shortcut
                 if (doShortcut)
                 {
                     string gitBashPath = @"C:\Program Files\Git\git-bash.exe";
@@ -283,10 +297,8 @@ namespace gitlink
             }
         }
 
-        public static void CommandVersion()
-        {
+        public static void CommandVersion() =>
             Console.WriteLine("gitlink v1.2 made by Vol4ok69");
-        }
 
         public static void CommandHelp()
         {
@@ -295,10 +307,10 @@ namespace gitlink
             Console.WriteLine("All flags: ");
             Console.WriteLine($"[{string.Join(", ", _allNotNoneFlags)}]\n");
             Console.WriteLine("Usage example:");
-            Console.WriteLine("  gitlink create -a    # create repo, .gitignore and shortcut");
-            Console.WriteLine("  gitlink create -g    # only git init/add/commit");
-            Console.WriteLine("  gitlink create -gi   # only .gitignore additions");
-            Console.WriteLine("  gitlink create -s    # only create shortcut");
+            Console.WriteLine("  gitlink create -a      # create repo, .gitignore and shortcut");
+            Console.WriteLine("  gitlink create -g      # only git init/add/commit");
+            Console.WriteLine("  gitlink create -gi     # only .gitignore additions");
+            Console.WriteLine("  gitlink create -s      # only create shortcut");
         }
 
         public static void InitializeArgs(string[]? args)
@@ -306,11 +318,11 @@ namespace gitlink
             if (_isInitialized)
                 return;
             _args = args;
-            //_args = new string[]
-            //{
+            //_args =
+            //[
             //    "create",
-            //    "-s"
-            //};
+            //    "-gi"
+            //];
             _isInitialized = true;
         }
 

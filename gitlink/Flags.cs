@@ -32,14 +32,14 @@
         /// </summary>
         public static readonly Flags None = new("");
 
-        public static readonly List<Flags> AllFlags = new List<Flags>
-        {
+        public static readonly List<Flags> AllFlags =
+        [
             None,
             All,
             Git,
             GitIgnore,
             Shortcut
-        };
+        ];
 
         /// <returns>Flag in string representation</returns>
         public override string ToString() => Flag;
