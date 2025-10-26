@@ -6,18 +6,21 @@ namespace gitlink
 
     class Program
     {
+
+        #region Поля и свойства
         private static string[]? _args;
         private static bool _isInitialized = false;
         private static readonly string _targetDir = Environment.CurrentDirectory;
         private static readonly string _logPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), "GitSupStrLog.txt");
 
         //флаги
-        private static readonly List<Flags> _allNotNoneFlags = [.. Flags.AllFlags.Skip(1)];
-        private static List<Flags> _selectedFlags = [];
+        private static readonly List<Flag> _allNotNoneFlags = [.. Flag.AllFlags.Skip(1)];
+        private static List<Flag> _selectedFlags = [];
 
         //команды
-        private static readonly List<Commands> _allNotNoneCommands = [.. Commands.AllCommands.Skip(1)];
-        private static Commands _selectedCommand = Commands.None;
+        private static readonly List<Command> _allNotNoneCommands = [.. Command.AllCommands.Skip(1)];
+        private static Command _selectedCommand = Command.None;
+        #endregion
 
         static void Main(string[] args)
         {
@@ -33,14 +36,13 @@ namespace gitlink
                     return;
                 }
 
-                //распознаем первую команду безопасно
-                var firstCmd = Commands.GetCommand(_args[0]);
-                if (firstCmd == Commands.None)
+                var command = Command.GetCommand(_args[0]);
+                if (command == Command.None)
                 {
                     Console.WriteLine("Error: The first argument must be command. [help] to view all commands.");
                     return;
                 }
-                _selectedCommand = firstCmd;
+                _selectedCommand = command;
 
                 FindFlags();
 
@@ -71,23 +73,25 @@ namespace gitlink
                 Console.WriteLine("Error: no arguments provided. Use [help] to see available commands.");
                 return;
             }
+            Console.WriteLine();
         }
 
+        #region Команды
         public static void CommandCreate()
         {
             try
             {
                 //проверка на конфликт флага -a c другими
-                if (_selectedFlags.Contains(Flags.All) && _selectedFlags.Count > 1)
+                if (_selectedFlags.Contains(Flag.All) && _selectedFlags.Count > 1)
                 {
                     Console.WriteLine("Cannot specify other flags when flag [-a] is specified");
                     return;
                 }
 
-                bool doAll = _selectedFlags.Contains(Flags.All);
-                bool doGit = doAll || _selectedFlags.Contains(Flags.Git);
-                bool doGitIgnore = doAll || _selectedFlags.Contains(Flags.GitIgnore);
-                bool doShortcut = doAll || _selectedFlags.Contains(Flags.Shortcut);
+                bool doAll = _selectedFlags.Contains(Flag.All);
+                bool doGit = doAll || _selectedFlags.Contains(Flag.Git);
+                bool doGitIgnore = doAll || _selectedFlags.Contains(Flag.GitIgnore);
+                bool doShortcut = doAll || _selectedFlags.Contains(Flag.Shortcut);
 
                 string? gitExecutable = null;
                 string gitExe1 = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Git", "bin", "git.exe");
@@ -116,30 +120,38 @@ namespace gitlink
                     return;
                 }
 
-                if (doGit)
+
+                if (doShortcut)
                 {
-                    if (!Directory.Exists(Path.Combine(_targetDir, ".git")))
+                    string gitBashPath = @"C:\Program Files\Git\git-bash.exe";
+                    if (!System.IO.File.Exists(gitBashPath))
                     {
-                        string initOut = CommandRunner.RunCommand(gitExecutable!, "init", _targetDir);
-                        Console.WriteLine(initOut.Trim());
-                        Log(_logPath, $"git init output: {initOut}");
+                        gitBashPath = @"C:\Program Files (x86)\Git\git-bash.exe";
+                        if (!System.IO.File.Exists(gitBashPath))
+                            Log(_logPath, "Git Bash not found in Program Files.");
                     }
-                    else
-                        Log(_logPath, $"Repository already initialized in '{_targetDir}'.");
 
-                    string addOut = CommandRunner.RunCommand(gitExecutable!, "add .", _targetDir);
-                    Log(_logPath, $"git add output: {addOut}");
-
-                    string commitOut = CommandRunner.RunCommand(gitExecutable!, "commit -m \"Initial commit\"", _targetDir);
-                    if (commitOut.StartsWith("Error"))
+                    string shortcutPath = Path.Combine(_targetDir, "Git Bash.lnk");
+                    try
                     {
-                        Log(_logPath, $"git commit failed or nothing to commit: {commitOut}");
-                        Console.WriteLine("Warning: commit may have failed (check git config or no changes). See log.");
+                        var wsh = new WshShell();
+                        var sc = (IWshShortcut)wsh.CreateShortcut(shortcutPath);
+                        sc.TargetPath = System.IO.File.Exists(gitBashPath) ? gitBashPath : "git";
+                        sc.WorkingDirectory = _targetDir;
+                        sc.Description = "Git Bash in this repository";
+                        sc.Save();
+
+                        string msg = $"Shortcut created: '{shortcutPath}'.";
+                        Console.WriteLine(msg);
+                        Log(_logPath, msg);
                     }
-                    else
-                        Log(_logPath, $"git commit output: {commitOut}");
+                    catch (Exception ex)
+                    {
+                        string msg = $"Failed to create shortcut: {ex.Message}";
+                        Console.WriteLine(msg);
+                        Log(_logPath, msg);
+                    }
                 }
-
 
                 if (doGitIgnore)
                 {
@@ -153,7 +165,7 @@ namespace gitlink
                         repoRoot = parent;
                     }
 
-                    if (!Directory.Exists(Path.Combine(repoRoot, ".git")))
+                    if (repoRoot != null && !Directory.Exists(Path.Combine(repoRoot, ".git")))
                     {
                         Console.WriteLine("Warning: .git folder not found in parent directories. Using current directory.");
                         repoRoot = _targetDir;
@@ -165,8 +177,8 @@ namespace gitlink
 
                     string[] candidatePaths =
                     [
-                        projectName+"/bin/",
-                        projectName+"/obj/",
+                        projectName + "/bin/",
+                        projectName + "/obj/",
                         ".vs/",
                         ".vscode/",
                         ".metadata/",
@@ -258,36 +270,28 @@ namespace gitlink
                     }
                 }
 
-                if (doShortcut)
+                if (doGit)
                 {
-                    string gitBashPath = @"C:\Program Files\Git\git-bash.exe";
-                    if (!System.IO.File.Exists(gitBashPath))
+                    if (!Directory.Exists(Path.Combine(_targetDir, ".git")))
                     {
-                        gitBashPath = @"C:\Program Files (x86)\Git\git-bash.exe";
-                        if (!System.IO.File.Exists(gitBashPath))
-                            Log(_logPath, "Git Bash not found in Program Files.");
+                        string initOut = CommandRunner.RunCommand(gitExecutable!, "init", _targetDir);
+                        Console.WriteLine(initOut.Trim());
+                        Log(_logPath, $"git init output: {initOut}");
                     }
+                    else
+                        Log(_logPath, $"Repository already initialized in '{_targetDir}'.");
 
-                    string shortcutPath = Path.Combine(_targetDir, "Git Bash.lnk");
-                    try
-                    {
-                        var wsh = new WshShell();
-                        var sc = (IWshShortcut)wsh.CreateShortcut(shortcutPath);
-                        sc.TargetPath = System.IO.File.Exists(gitBashPath) ? gitBashPath : "git";
-                        sc.WorkingDirectory = _targetDir;
-                        sc.Description = "Git Bash in this repository";
-                        sc.Save();
+                    string addOut = CommandRunner.RunCommand(gitExecutable!, "add .", _targetDir);
+                    Log(_logPath, $"git add output: {addOut}");
 
-                        string msg = $"Shortcut created: '{shortcutPath}'.";
-                        Console.WriteLine(msg);
-                        Log(_logPath, msg);
-                    }
-                    catch (Exception ex)
+                    string commitOut = CommandRunner.RunCommand(gitExecutable!, "commit -m \"Initial commit\"", _targetDir);
+                    if (commitOut.StartsWith("Error"))
                     {
-                        string msg = $"Failed to create shortcut: {ex.Message}";
-                        Console.WriteLine(msg);
-                        Log(_logPath, msg);
+                        Log(_logPath, $"git commit failed or nothing to commit: {commitOut}");
+                        Console.WriteLine("Warning: commit may have failed (check git config or no changes). See log.");
                     }
+                    else
+                        Log(_logPath, $"git commit output: {commitOut}");
                 }
             }
             catch (Exception e)
@@ -312,6 +316,8 @@ namespace gitlink
             Console.WriteLine("  gitlink create -s      # only create shortcut");
         }
 
+        #endregion
+
         public static void InitializeArgs(string[]? args)
         {
             if (_isInitialized)
@@ -332,8 +338,8 @@ namespace gitlink
 
             foreach (var arg in _args.Skip(1))
             {
-                var flag = Flags.GetFlag(arg);
-                if (flag != Flags.None && !_selectedFlags.Contains(flag))
+                var flag = Flag.GetFlag(arg);
+                if (flag != Flag.None && !_selectedFlags.Contains(flag))
                     _selectedFlags.Add(flag);
             }
         }
