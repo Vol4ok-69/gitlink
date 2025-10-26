@@ -293,6 +293,9 @@ namespace gitlink
                     else
                         Log(_logPath, $"Repository already initialized in '{_targetDir}'.");
 
+                    string renameOut = CommandRunner.RunCommand(gitExecutable!, "branch -M main", _targetDir);
+                    Log(_logPath, $"git rename output: {renameOut}");
+
                     string addOut = CommandRunner.RunCommand(gitExecutable!, "add .", _targetDir);
                     Log(_logPath, $"git add output: {addOut}");
 
@@ -333,15 +336,15 @@ namespace gitlink
 
                 //репозиторий
                 if (repoExists)
-                    Print("✔ Git repository detected (.git found)", ConsoleColor.Green);
+                    Print("Git repository detected (.git found)", ConsoleColor.Green);
                 else
-                    Print("✖ No Git repository found", ConsoleColor.Red);
+                    Print("No Git repository found", ConsoleColor.Red);
 
-                //ярлык
+                //Ярлык
                 if (shortcutExists)
-                    Print("✔ Shortcut 'Git Bash.lnk' exists", ConsoleColor.Green);
+                    Print("Shortcut 'Git Bash.lnk' exists", ConsoleColor.Green);
                 else
-                    Print("✖ Shortcut 'Git Bash.lnk' not found", ConsoleColor.Yellow);
+                    Print("Shortcut 'Git Bash.lnk' not found", ConsoleColor.Yellow);
 
                 //.gitignore
                 if (gitignoreExists)
@@ -363,20 +366,39 @@ namespace gitlink
                         "Git Bash.lnk"
                     ];
 
-                    var missing = candidatePaths.Where(p => !existing.Contains(p.TrimEnd('/'))).ToList();
+                    //оставляем только реально существующие элементы
+                    List<string> existingInFs = [];
+                    foreach (var p in candidatePaths)
+                    {
+                        string checkPath = Path.Combine(_targetDir, p.TrimEnd('/'));
+                        if (Directory.Exists(checkPath) || System.IO.File.Exists(checkPath))
+                            existingInFs.Add(p);
+                    }
 
-                    if (missing.Count == 0)
-                        Print("All common entries are already in .gitignore", ConsoleColor.Green);
+                    if (existingInFs.Count == 0)
+                    {
+                        Print("No matching files or directories found to check in .gitignore.", ConsoleColor.Gray);
+                    }
                     else
                     {
-                        Print("Some entries are missing in .gitignore:", ConsoleColor.Yellow);
-                        foreach (var m in missing)
-                            Print($"   - {m}", ConsoleColor.Gray);
+                        var missing = existingInFs
+                            .Where(p => !existing.Contains(p.TrimEnd('/')))
+                            .ToList();
+
+                        if (missing.Count == 0)
+                            Print("All existing items are already in .gitignore", ConsoleColor.Green);
+                        else
+                        {
+                            Print("Some existing items are missing in .gitignore:", ConsoleColor.Yellow);
+                            foreach (var m in missing)
+                                Print($"   {m}", ConsoleColor.Gray);
+                        }
                     }
                 }
                 else
+                {
                     Print(".gitignore not found", ConsoleColor.Red);
-
+                }
 
                 Log(_logPath, $"Status checked for '{_targetDir}'");
             }
@@ -389,7 +411,7 @@ namespace gitlink
         }
 
         public static void CommandVersion() =>
-            Print("gitlink v1.2 made by Vol4ok69", ConsoleColor.Cyan);
+            Print("gitlink v1.3 made by Vol4ok69", ConsoleColor.Cyan);
 
         public static void CommandHelp()
         {
