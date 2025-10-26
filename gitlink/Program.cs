@@ -6,7 +6,6 @@ namespace gitlink
 
     class Program
     {
-
         #region Поля и свойства
         private static string[]? _args;
         private static bool _isInitialized = false;
@@ -32,14 +31,14 @@ namespace gitlink
                 //проверка на повтор аргументов
                 if (_args.Distinct(StringComparer.Ordinal).Count() != _args.Length)
                 {
-                    Console.WriteLine("Error: Arguments should not be repeated.");
+                    Print("Error: Arguments should not be repeated.", ConsoleColor.Red);
                     return;
                 }
 
                 var command = Command.GetCommand(_args[0]);
                 if (command == Command.None)
                 {
-                    Console.WriteLine("Error: The first argument must be command. [help] to view all commands.");
+                    Print("Error: The first argument must be command. [help] to view all commands.", ConsoleColor.Red);
                     return;
                 }
                 _selectedCommand = command;
@@ -64,13 +63,13 @@ namespace gitlink
                         break;
 
                     default:
-                        Console.WriteLine($"Please enter a command. Use [help] to see available commands.");
+                        Print("Please enter a command. Use [help] to see available commands.", ConsoleColor.Yellow);
                         return;
                 }
             }
             else
             {
-                Console.WriteLine("Error: no arguments provided. Use [help] to see available commands.");
+                Print("Error: no arguments provided. Use [help] to see available commands.", ConsoleColor.Red);
                 return;
             }
             Console.WriteLine();
@@ -81,10 +80,9 @@ namespace gitlink
         {
             try
             {
-                //проверка на конфликт флага -a c другими
                 if (_selectedFlags.Contains(Flag.All) && _selectedFlags.Count > 1)
                 {
-                    Console.WriteLine("Cannot specify other flags when flag [-a] is specified");
+                    Print("Cannot specify other flags when flag [-a] is specified", ConsoleColor.Red);
                     return;
                 }
 
@@ -115,59 +113,67 @@ namespace gitlink
                 if (doGit && gitExecutable == null)
                 {
                     string msg = "Git not found. Make sure Git is installed and available in PATH.";
-                    Console.WriteLine(msg);
+                    Print(msg, ConsoleColor.Red);
                     Log(_logPath, msg);
                     return;
                 }
 
-
                 if (doShortcut)
                 {
-                    string gitBashPath = @"C:\Program Files\Git\git-bash.exe";
-                    if (!System.IO.File.Exists(gitBashPath))
-                    {
-                        gitBashPath = @"C:\Program Files (x86)\Git\git-bash.exe";
-                        if (!System.IO.File.Exists(gitBashPath))
-                            Log(_logPath, "Git Bash not found in Program Files.");
-                    }
-
                     string shortcutPath = Path.Combine(_targetDir, "Git Bash.lnk");
-                    try
+                    if (System.IO.File.Exists(shortcutPath))
                     {
-                        var wsh = new WshShell();
-                        var sc = (IWshShortcut)wsh.CreateShortcut(shortcutPath);
-                        sc.TargetPath = System.IO.File.Exists(gitBashPath) ? gitBashPath : "git";
-                        sc.WorkingDirectory = _targetDir;
-                        sc.Description = "Git Bash in this repository";
-                        sc.Save();
-
-                        string msg = $"Shortcut created: '{shortcutPath}'.";
-                        Console.WriteLine(msg);
+                        string msg = $"Shortcut already exist.";
+                        Print(msg, ConsoleColor.Yellow);
                         Log(_logPath, msg);
                     }
-                    catch (Exception ex)
+                    else
                     {
-                        string msg = $"Failed to create shortcut: {ex.Message}";
-                        Console.WriteLine(msg);
-                        Log(_logPath, msg);
+                        string gitBashPath = @"C:\Program Files\Git\git-bash.exe";
+                        if (!System.IO.File.Exists(gitBashPath))
+                        {
+                            gitBashPath = @"C:\Program Files (x86)\Git\git-bash.exe";
+                            if (!System.IO.File.Exists(gitBashPath))
+                                Log(_logPath, "Git Bash not found in Program Files.");
+                        }
+
+
+                        try
+                        {
+                            var wsh = new WshShell();
+                            var sc = (IWshShortcut)wsh.CreateShortcut(shortcutPath);
+                            sc.TargetPath = System.IO.File.Exists(gitBashPath) ? gitBashPath : "git";
+                            sc.WorkingDirectory = _targetDir;
+                            sc.Description = "Git Bash in this repository";
+                            sc.Save();
+
+                            string msg = $"Shortcut created: '{shortcutPath}'.";
+                            Print(msg, ConsoleColor.Green);
+                            Log(_logPath, msg);
+                        }
+                        catch (Exception ex)
+                        {
+                            string msg = $"Failed to create shortcut: {ex.Message}";
+                            Print(msg, ConsoleColor.Red);
+                            Log(_logPath, msg);
+                        }
                     }
                 }
 
                 if (doGitIgnore)
                 {
-                    //корневая папка репозитория
                     string repoRoot = _targetDir;
                     while (repoRoot != null && !Directory.Exists(Path.Combine(repoRoot, ".git")))
                     {
                         string? parent = Directory.GetParent(repoRoot)?.FullName;
                         if (parent == null || parent == repoRoot)
-                            break; //достигли корня диска
+                            break;
                         repoRoot = parent;
                     }
 
                     if (repoRoot != null && !Directory.Exists(Path.Combine(repoRoot, ".git")))
                     {
-                        Console.WriteLine("Warning: .git folder not found in parent directories. Using current directory.");
+                        Print("Warning: .git folder not found in parent directories. Using current directory.", ConsoleColor.Yellow);
                         repoRoot = _targetDir;
                     }
 
@@ -189,48 +195,48 @@ namespace gitlink
                     bool isExist = System.IO.File.Exists(gitIgnorePath);
                     var existingLines = isExist
                         ? System.IO.File.ReadAllLines(gitIgnorePath)
-                        .Select(l => l.Trim().TrimEnd('/')).ToHashSet(StringComparer.OrdinalIgnoreCase)
+                            .Select(l => l.Trim().TrimEnd('/'))
+                            .Where(l => !string.IsNullOrWhiteSpace(l))
+                            .ToHashSet(StringComparer.OrdinalIgnoreCase)
                         : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+                    if (!isExist)
+                    {
+                        System.IO.File.WriteAllText(gitIgnorePath, string.Empty);
+                        isExist = true;
+                        Log(_logPath, $".gitignore created: '{gitIgnorePath}'.");
+                        Print($".gitignore created: '{gitIgnorePath}'", ConsoleColor.Green);
+                    }
 
                     List<string> foundCandidates = [];
                     foreach (var path in candidatePaths)
                     {
                         string nameToCheck = path.TrimEnd('/');
                         string fullPath = Path.Combine(_targetDir, nameToCheck);
+
+                        //добавляем в кандидаты только если существует в проекте
                         if (Directory.Exists(fullPath) || System.IO.File.Exists(fullPath))
-                            foundCandidates.Add(path);
+                            if (!existingLines.Contains(nameToCheck))  //не добавлено в .gitignore
+                                foundCandidates.Add(path);
                     }
 
                     if (foundCandidates.Count == 0)
-                        Console.WriteLine("No candidate files or directories (.vs, .vscode, .metadata, Git Bash.lnk, .github, bin, obj) found to add to .gitignore.");
-
+                        Print("No new candidates to add to .gitignore (everything already added).", ConsoleColor.Gray);
                     else
                     {
-                        Console.WriteLine("Found the following candidates to add to .gitignore:");
-                        foreach (var p in foundCandidates) Console.WriteLine($"  {p}");
-                        Console.WriteLine("Options: [y] add this, [n] skip, [a] add this and all remaining");
-
-                        if (!isExist)
-                        {
-                            System.IO.File.WriteAllText(gitIgnorePath, string.Empty);
-                            isExist = true;
-                            Log(_logPath, $".gitignore created: '{gitIgnorePath}'.");
-                        }
+                        Print("Found the following candidates to add to .gitignore:", ConsoleColor.Cyan);
+                        foreach (var p in foundCandidates) Print($"  {p}", ConsoleColor.Gray);
+                        Print("Options: [y] add this, [n] skip, [a] add this and all remaining", ConsoleColor.Gray);
 
                         for (int i = 0; i < foundCandidates.Count; i++)
                         {
                             string path = foundCandidates[i];
                             string nameToCheck = path.TrimEnd('/');
-                            if (existingLines.Contains(nameToCheck))
-                                continue;
 
                             while (true)
                             {
-                                Console.Write($"Add '{path}' to .gitignore? [y/n/a] ");
-                                var input = Console.ReadLine()?.
-                                    Trim().
-                                    ToLowerInvariant()
-                                    ?? "";
+                                Print($"Add '{path}' to .gitignore? [y/n/a] ", ConsoleColor.Cyan, newline: false);
+                                var input = Console.ReadLine()?.Trim().ToLowerInvariant() ?? "";
 
                                 if (input == "a" || input == "all")
                                 {
@@ -242,12 +248,12 @@ namespace gitlink
                                         {
                                             System.IO.File.AppendAllText(gitIgnorePath, rem + Environment.NewLine);
                                             string msg = $"Added to .gitignore: '{rem}'";
-                                            Console.WriteLine(msg);
+                                            Print(msg, ConsoleColor.Green);
                                             Log(_logPath, msg);
                                             existingLines.Add(remName);
                                         }
                                     }
-                                    i = foundCandidates.Count; //выход из фор внешнего
+                                    i = foundCandidates.Count;
                                     break;
                                 }
 
@@ -255,7 +261,7 @@ namespace gitlink
                                 {
                                     System.IO.File.AppendAllText(gitIgnorePath, path + Environment.NewLine);
                                     string msgAdded = $"Added to .gitignore: '{path}'";
-                                    Console.WriteLine(msgAdded);
+                                    Print(msgAdded, ConsoleColor.Green);
                                     Log(_logPath, msgAdded);
                                     existingLines.Add(nameToCheck);
                                     break;
@@ -264,18 +270,19 @@ namespace gitlink
                                 if (input == "n" || input == "no" || input == "")
                                     break;
 
-                                Console.WriteLine("Please answer 'y', 'n' or 'a'.");
+                                Print("Please answer 'y', 'n' or 'a'.", ConsoleColor.Yellow);
                             }
                         }
                     }
                 }
+
 
                 if (doGit)
                 {
                     if (!Directory.Exists(Path.Combine(_targetDir, ".git")))
                     {
                         string initOut = CommandRunner.RunCommand(gitExecutable!, "init", _targetDir);
-                        Console.WriteLine(initOut.Trim());
+                        Print(initOut.Trim(), ConsoleColor.Green);
                         Log(_logPath, $"git init output: {initOut}");
                     }
                     else
@@ -288,7 +295,7 @@ namespace gitlink
                     if (commitOut.StartsWith("Error"))
                     {
                         Log(_logPath, $"git commit failed or nothing to commit: {commitOut}");
-                        Console.WriteLine("Warning: commit may have failed (check git config or no changes). See log.");
+                        Print("Warning: commit may have failed (check git config or no changes). See log.", ConsoleColor.Yellow);
                     }
                     else
                         Log(_logPath, $"git commit output: {commitOut}");
@@ -296,27 +303,37 @@ namespace gitlink
             }
             catch (Exception e)
             {
+                Print($"Error: {e.Message}", ConsoleColor.Red);
                 Log(_logPath, $"Error: {e.Message}\n{e.StackTrace}");
             }
         }
 
         public static void CommandVersion() =>
-            Console.WriteLine("gitlink v1.2 made by Vol4ok69");
+            Print("gitlink v1.2 made by Vol4ok69", ConsoleColor.Cyan);
 
         public static void CommandHelp()
         {
-            Console.WriteLine("All commands: ");
-            Console.WriteLine($"[{string.Join(", ", _allNotNoneCommands)}]\n");
-            Console.WriteLine("All flags: ");
-            Console.WriteLine($"[{string.Join(", ", _allNotNoneFlags)}]\n");
-            Console.WriteLine("Usage example:");
-            Console.WriteLine("  gitlink create -a      # create repo, .gitignore and shortcut");
-            Console.WriteLine("  gitlink create -g      # only git init/add/commit");
-            Console.WriteLine("  gitlink create -gi     # only .gitignore additions");
-            Console.WriteLine("  gitlink create -s      # only create shortcut");
+            Print("All commands:", ConsoleColor.Cyan);
+            Print($"[{string.Join(", ", _allNotNoneCommands)}]\n", ConsoleColor.Gray);
+            Print("All flags:", ConsoleColor.Cyan);
+            Print($"[{string.Join(", ", _allNotNoneFlags)}]\n", ConsoleColor.Gray);
+            Print("Usage example:", ConsoleColor.Cyan);
+            Print("  gitlink create -a      # create repo, .gitignore and shortcut", ConsoleColor.Gray);
+            Print("  gitlink create -g      # only git init/add/commit", ConsoleColor.Gray);
+            Print("  gitlink create -gi     # only .gitignore additions", ConsoleColor.Gray);
+            Print("  gitlink create -s      # only create shortcut", ConsoleColor.Gray);
         }
 
         #endregion
+
+        private static void Print(string text, ConsoleColor color = ConsoleColor.Gray, bool newline = true)
+        {
+            var prev = Console.ForegroundColor;
+            Console.ForegroundColor = color;
+            if (newline) Console.WriteLine(text);
+            else Console.Write(text);
+            Console.ForegroundColor = prev;
+        }
 
         public static void InitializeArgs(string[]? args)
         {
@@ -326,6 +343,7 @@ namespace gitlink
             //_args =
             //[
             //    "create",
+            //    "-s",
             //    "-gi"
             //];
             _isInitialized = true;
