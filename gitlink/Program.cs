@@ -1,9 +1,10 @@
 ﻿using IWshRuntimeLibrary;
+using System.Diagnostics;
+using System.Xml;
 
 namespace gitlink
 {
     //              dotnet publish -r win-x64 -c Release --self-contained true
-
     class Program
     {
         #region Поля и свойства
@@ -95,6 +96,24 @@ namespace gitlink
                 bool doGit = doAll || _selectedFlags.Contains(Flag.Git);
                 bool doGitIgnore = doAll || _selectedFlags.Contains(Flag.GitIgnore);
                 bool doShortcut = doAll || _selectedFlags.Contains(Flag.Shortcut);
+                bool doDockerIgnore = doAll || _selectedFlags.Contains(Flag.DockerIgnore);
+                bool doDockerFile = doAll || _selectedFlags.Contains(Flag.DockerFile);
+
+
+                string repoRoot = _targetDir;
+                if (doGitIgnore || doDockerIgnore || doGit)
+                {
+                    string? current = _targetDir;
+                    while (current != null && !Directory.Exists(Path.Combine(current, ".git")))
+                    {
+                        string? parent = Directory.GetParent(current)?.FullName;
+                        if (parent == null || parent == current)
+                            break;
+                        current = parent;
+                    }
+                    if (current != null && Directory.Exists(Path.Combine(current, ".git")))
+                        repoRoot = current;
+                }
 
                 string? gitExecutable = null;
                 string gitExe1 = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Git", "bin", "git.exe");
@@ -115,7 +134,7 @@ namespace gitlink
                     }
                 }
 
-                if (doGit && gitExecutable == null)
+                if ((doGit || doGitIgnore || doDockerIgnore || doDockerFile) && gitExecutable == null)
                 {
                     string msg = "Git not found. Make sure Git is installed and available in PATH.";
                     Print(msg, ConsoleColor.Red);
@@ -142,7 +161,6 @@ namespace gitlink
                                 Log(_logPath, "Git Bash not found in Program Files.");
                         }
 
-
                         try
                         {
                             var wsh = new WshShell();
@@ -165,25 +183,10 @@ namespace gitlink
                     }
                 }
 
+                //.gitignore
                 if (doGitIgnore)
                 {
-                    string repoRoot = _targetDir;
-                    while (repoRoot != null && !Directory.Exists(Path.Combine(repoRoot, ".git")))
-                    {
-                        string? parent = Directory.GetParent(repoRoot)?.FullName;
-                        if (parent == null || parent == repoRoot)
-                            break;
-                        repoRoot = parent;
-                    }
-
-                    if (repoRoot != null && !Directory.Exists(Path.Combine(repoRoot, ".git")))
-                    {
-                        Print("Warning: .git folder not found in parent directories. Using current directory.", ConsoleColor.Yellow);
-                        repoRoot = _targetDir;
-                    }
-
                     string gitIgnorePath = Path.Combine(repoRoot, ".gitignore");
-
                     string projectName = Path.GetFileName(repoRoot.TrimEnd(Path.DirectorySeparatorChar));
 
                     string[] candidatePaths =
@@ -194,7 +197,9 @@ namespace gitlink
                         ".vscode/",
                         ".metadata/",
                         ".github/",
-                        "Git Bash.lnk"
+                        "Git Bash.lnk",
+                        ".dockerignore",
+                        "Dockerfile"
                     ];
 
                     bool isExist = System.IO.File.Exists(gitIgnorePath);
@@ -281,25 +286,146 @@ namespace gitlink
                     }
                 }
 
+                //.dockerignore
+                if (doDockerIgnore)
+                {
+                    string dockerIgnorePath = Path.Combine(repoRoot, ".dockerignore");
+                    string[] dockerCandidatePatterns =
+                    {
+                        ".git",
+                        ".gitignore",
+                        ".vs/",
+                        ".vscode/",
+                        "bin/",
+                        "obj/",
+                        "node_modules/",
+                        "Git Bash.lnk",
+                    };
+
+                    bool isExist = System.IO.File.Exists(dockerIgnorePath);
+                    var existingLines = isExist
+                        ? System.IO.File.ReadAllLines(dockerIgnorePath)
+                            .Select(l => l.Trim().TrimEnd('/'))
+                            .Where(l => !string.IsNullOrWhiteSpace(l))
+                            .ToHashSet(StringComparer.OrdinalIgnoreCase)
+                        : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+                    if (!isExist)
+                    {
+                        System.IO.File.WriteAllText(dockerIgnorePath, string.Empty);
+                        isExist = true;
+                        Log(_logPath, $".dockerignore created: '{dockerIgnorePath}'.");
+                        Print($".dockerignore created: '{dockerIgnorePath}'", ConsoleColor.Green);
+                    }
+
+                    List<string> foundCandidates = [];
+                    foreach (var pattern in dockerCandidatePatterns)
+                    {
+                        string nameToCheck = pattern.TrimEnd('/');
+                        string fullPath = Path.Combine(_targetDir, nameToCheck);
+
+                        if (Directory.Exists(fullPath) || System.IO.File.Exists(fullPath))
+                        {
+                            if (!existingLines.Contains(nameToCheck))
+                            {
+                                foundCandidates.Add(pattern);
+                            }
+                        }
+                    }
+
+                    if (foundCandidates.Count == 0)
+                        Print("No new candidates to add to .dockerignore (everything already added).", ConsoleColor.Gray);
+                    else
+                    {
+                        Print("Found the following candidates to add to .dockerignore:", ConsoleColor.Cyan);
+                        foreach (var p in foundCandidates) Print($"  {p}", ConsoleColor.Gray);
+                        Print("Options: [y] add this, [n] skip, [a] add this and all remaining", ConsoleColor.Gray);
+
+                        for (int i = 0; i < foundCandidates.Count; i++)
+                        {
+                            string pattern = foundCandidates[i];
+                            string nameToCheck = pattern.TrimEnd('/');
+
+                            while (true)
+                            {
+                                Print($"Add '{pattern}' to .dockerignore? [y/n/a] ", ConsoleColor.Cyan, newline: false);
+                                var input = Console.ReadLine()?.Trim().ToLowerInvariant() ?? "";
+
+                                if (input == "a" || input == "all")
+                                {
+                                    for (int j = i; j < foundCandidates.Count; j++)
+                                    {
+                                        string rem = foundCandidates[j];
+                                        string remName = rem.TrimEnd('/');
+                                        if (!existingLines.Contains(remName))
+                                        {
+                                            System.IO.File.AppendAllText(dockerIgnorePath, rem + Environment.NewLine);
+                                            string msg = $"Added to .dockerignore: '{rem}'";
+                                            Print(msg, ConsoleColor.Green);
+                                            Log(_logPath, msg);
+                                            existingLines.Add(remName);
+                                        }
+                                    }
+                                    i = foundCandidates.Count;
+                                    break;
+                                }
+
+                                if (input == "y" || input == "yes")
+                                {
+                                    System.IO.File.AppendAllText(dockerIgnorePath, pattern + Environment.NewLine);
+                                    string msgAdded = $"Added to .dockerignore: '{pattern}'";
+                                    Print(msgAdded, ConsoleColor.Green);
+                                    Log(_logPath, msgAdded);
+                                    existingLines.Add(nameToCheck);
+                                    break;
+                                }
+
+                                if (input == "n" || input == "no" || input == "")
+                                    break;
+
+                                Print("Please answer 'y', 'n' or 'a'.", ConsoleColor.Yellow);
+                            }
+                        }
+                    }
+                }
+
+                //Dockerfile
+                if (doDockerFile)
+                {
+                    string dockerFilePath = Path.Combine(_targetDir, "Dockerfile");
+                    if (System.IO.File.Exists(dockerFilePath))
+                    {
+                        string msg = $"Dockerfile already exists at '{dockerFilePath}'.";
+                        Print(msg, ConsoleColor.Yellow);
+                        Log(_logPath, msg);
+                    }
+                    else
+                    {
+                        System.IO.File.WriteAllText(dockerFilePath, String.Empty);
+                        string msg = $"Dockerfile created at '{dockerFilePath}'.";
+                        Print(msg, ConsoleColor.Green);
+                        Log(_logPath, msg);
+                    }
+                }
 
                 if (doGit)
                 {
-                    if (!Directory.Exists(Path.Combine(_targetDir, ".git")))
+                    if (!Directory.Exists(Path.Combine(repoRoot, ".git")))
                     {
-                        string initOut = CommandRunner.RunCommand(gitExecutable!, "init", _targetDir);
+                        string initOut = CommandRunner.RunCommand(gitExecutable!, "init", repoRoot);
                         Print(initOut.Trim(), ConsoleColor.Green);
                         Log(_logPath, $"git init output: {initOut}");
                     }
                     else
-                        Log(_logPath, $"Repository already initialized in '{_targetDir}'.");
+                        Log(_logPath, $"Repository already initialized in '{repoRoot}'.");
 
-                    string renameOut = CommandRunner.RunCommand(gitExecutable!, "branch -M main", _targetDir);
+                    string renameOut = CommandRunner.RunCommand(gitExecutable!, "branch -M main", repoRoot);
                     Log(_logPath, $"git rename output: {renameOut}");
 
-                    string addOut = CommandRunner.RunCommand(gitExecutable!, "add .", _targetDir);
+                    string addOut = CommandRunner.RunCommand(gitExecutable!, "add .", repoRoot);
                     Log(_logPath, $"git add output: {addOut}");
 
-                    string commitOut = CommandRunner.RunCommand(gitExecutable!, "commit -m \"Initial commit\"", _targetDir);
+                    string commitOut = CommandRunner.RunCommand(gitExecutable!, "commit -m \"Initial commit\"", repoRoot);
                     if (commitOut.StartsWith("Error"))
                     {
                         Log(_logPath, $"git commit failed or nothing to commit: {commitOut}");
@@ -333,6 +459,10 @@ namespace gitlink
                 bool shortcutExists = System.IO.File.Exists(Path.Combine(_targetDir, "Git Bash.lnk"));
                 string gitIgnorePath = Path.Combine(repoRoot, ".gitignore");
                 bool gitignoreExists = System.IO.File.Exists(gitIgnorePath);
+                string dockerIgnorePath = Path.Combine(repoRoot, ".dockerignore");
+                bool dockerignoreExists = System.IO.File.Exists(dockerIgnorePath);
+                string dockerFilePath = Path.Combine(_targetDir, "Dockerfile");
+                bool dockerfileExists = System.IO.File.Exists(dockerFilePath);
 
                 //репозиторий
                 if (repoExists)
@@ -400,6 +530,67 @@ namespace gitlink
                     Print(".gitignore not found", ConsoleColor.Red);
                 }
 
+                //.dockerignore
+                if (dockerignoreExists)
+                {
+                    string[] lines = System.IO.File.ReadAllLines(dockerIgnorePath);
+                    var existing = lines.Select(l => l.Trim().TrimEnd('/'))
+                                        .Where(l => !string.IsNullOrWhiteSpace(l))
+                                        .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+                    string[] dockerCandidatePatterns =
+                    {
+                        ".git",
+                        ".gitignore",
+                        ".vs/",
+                        ".vscode/",
+                        "bin/",
+                        "obj/",
+                        "node_modules/",
+                        "Git Bash.lnk",
+                        ".dockerignore",
+                        "Dockerfile"
+                    };
+
+                    List<string> existingInFs = [];
+                    foreach (var p in dockerCandidatePatterns)
+                    {
+                        string checkPath = Path.Combine(_targetDir, p.TrimEnd('/'));
+                        if (Directory.Exists(checkPath) || System.IO.File.Exists(checkPath))
+                            existingInFs.Add(p);
+                    }
+
+                    if (existingInFs.Count == 0)
+                    {
+                        Print("No matching files or directories found to check in .dockerignore.", ConsoleColor.Gray);
+                    }
+                    else
+                    {
+                        var missing = existingInFs
+                            .Where(p => !existing.Contains(p.TrimEnd('/')))
+                            .ToList();
+
+                        if (missing.Count == 0)
+                            Print("All existing items are already in .dockerignore", ConsoleColor.Green);
+                        else
+                        {
+                            Print("Some existing items are missing in .dockerignore:", ConsoleColor.Yellow);
+                            foreach (var m in missing)
+                                Print($"   {m}", ConsoleColor.Gray);
+                        }
+                    }
+                }
+                else
+                {
+                    Print(".dockerignore not found", ConsoleColor.Red);
+                }
+
+                //Dockerfile
+                if (dockerfileExists)
+                    Print("Dockerfile exists", ConsoleColor.Green);
+                else
+                    Print("Dockerfile not found", ConsoleColor.Red);
+
                 Log(_logPath, $"Status checked for '{_targetDir}'");
             }
             catch (Exception ex)
@@ -411,7 +602,7 @@ namespace gitlink
         }
 
         public static void CommandVersion() =>
-            Print("gitlink v1.3 made by Vol4ok69", ConsoleColor.Cyan);
+            Print("gitlink v1.5 made by Vol4ok69", ConsoleColor.Cyan);
 
         public static void CommandHelp()
         {
@@ -420,10 +611,12 @@ namespace gitlink
             Print("All flags:", ConsoleColor.Cyan);
             Print($"[{string.Join(", ", _allNotNoneFlags)}]\n", ConsoleColor.Gray);
             Print("Usage example:", ConsoleColor.Cyan);
-            Print("  gitlink create -a      # create repo, .gitignore and shortcut", ConsoleColor.Gray);
+            Print("  gitlink create -a      # create repo, .gitignore, shortcut, .dockerignore and Dockerfile", ConsoleColor.Gray);
             Print("  gitlink create -g      # only git init/add/commit", ConsoleColor.Gray);
             Print("  gitlink create -gi     # only .gitignore additions", ConsoleColor.Gray);
             Print("  gitlink create -s      # only create shortcut", ConsoleColor.Gray);
+            Print("  gitlink create -di     # only .dockerignore additions", ConsoleColor.Gray);
+            Print("  gitlink create -df     # only create Dockerfile", ConsoleColor.Gray);
         }
 
         #endregion
@@ -468,3 +661,6 @@ namespace gitlink
             System.IO.File.AppendAllText(logPath, $"[{DateTime.Now:dd.MM.yyyy HH:mm:ss}] {message + Environment.NewLine}");
     }
 }
+
+
+

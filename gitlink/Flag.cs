@@ -11,6 +11,7 @@
         /// commits those files with the message "Initial commit",
         /// creates a shortcut to git bash,
         /// creates .gitignore and adds all .* files in directory to it.
+        /// Also creates .dockerignore and Dockerfile.
         /// </summary>
         public static readonly Flag All = new("-a");
 
@@ -23,9 +24,19 @@
         public static readonly Flag Shortcut = new("-s");
 
         /// <summary>
-        /// Creates .gitignore and adds all .* files in directory to it.
+        /// Creates .gitignore and adds relevant files/directories to it.
         /// </summary>
         public static readonly Flag GitIgnore = new("-gi");
+
+        /// <summary>
+        /// Creates .dockerignore and adds relevant files/directories to it.
+        /// </summary>
+        public static readonly Flag DockerIgnore = new("-di");
+
+        /// <summary>
+        /// Creates a Dockerfile with basic configuration.
+        /// </summary>
+        public static readonly Flag DockerFile = new("-df");
 
         /// <summary>
         /// Without flag
@@ -38,7 +49,9 @@
             All,
             Git,
             GitIgnore,
-            Shortcut
+            Shortcut,
+            DockerIgnore,
+            DockerFile
         ];
 
         /// <returns>Flag in string representation</returns>
